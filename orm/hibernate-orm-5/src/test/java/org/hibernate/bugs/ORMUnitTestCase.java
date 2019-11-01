@@ -15,12 +15,24 @@
  */
 package org.hibernate.bugs;
 
+import java.util.List;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.MappedSuperclass;
+import javax.persistence.MapsId;
+import javax.persistence.OneToOne;
+
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
+
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * This template demonstrates how to develop a test case for Hibernate ORM, using its built-in unit test framework.
@@ -33,47 +45,118 @@ import org.junit.Test;
  */
 public class ORMUnitTestCase extends BaseCoreFunctionalTestCase {
 
-	// Add your entities here.
 	@Override
-	protected Class[] getAnnotatedClasses() {
-		return new Class[] {
-//				Foo.class,
-//				Bar.class
-		};
+	protected Class<?>[] getAnnotatedClasses() {
+		return new Class[] { Employee.class, Task.class };
 	}
 
-	// If you use *.hbm.xml mappings, instead of annotations, add the mappings here.
-	@Override
-	protected String[] getMappings() {
-		return new String[] {
-//				"Foo.hbm.xml",
-//				"Bar.hbm.xml"
-		};
-	}
-	// If those mappings reside somewhere other than resources/org/hibernate/test, change this.
-	@Override
-	protected String getBaseForMappings() {
-		return "org/hibernate/test/";
-	}
-
-	// Add in any settings that are specific to your test.  See resources/hibernate.properties for the defaults.
-	@Override
-	protected void configure(Configuration configuration) {
-		super.configure( configuration );
-
-		configuration.setProperty( AvailableSettings.SHOW_SQL, Boolean.TRUE.toString() );
-		configuration.setProperty( AvailableSettings.FORMAT_SQL, Boolean.TRUE.toString() );
-		//configuration.setProperty( AvailableSettings.GENERATE_STATISTICS, "true" );
-	}
-
-	// Add your tests, using standard JUnit.
 	@Test
-	public void hhh123Test() throws Exception {
-		// BaseCoreFunctionalTestCase automatically creates the SessionFactory and provides the Session.
-		Session s = openSession();
-		Transaction tx = s.beginTransaction();
-		// Do stuff...
-		tx.commit();
-		s.close();
+	public void testIt() {
+		inTransaction( session -> {
+			Employee employee = new Employee( "emp" );
+			Task task = new Task( "t1", employee );
+			employee.setTask( task );
+
+			session.persist( employee );
+			session.persist( task );
+
+		} );
+
+		inTransaction(
+				session -> {
+					List<Employee> employees = session.createQuery( "from Employee", Employee.class ).list();
+					assertThat( employees.size(), is( 1 ) );
+				}
+		);
+	}
+
+	@Entity(name = "Employee")
+	public static class Employee {
+		private String name;
+
+		private Task task;
+
+		public Employee() {
+		}
+
+		public Employee(String name) {
+			setName( name );
+		}
+
+		@Id
+		public String getName() {
+			return name;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
+
+		@OneToOne(mappedBy = "employee", optional = false)
+		public Task getTask() {
+			return task;
+		}
+
+		public void setTask(Task task) {
+			this.task = task;
+		}
+	}
+
+	@MappedSuperclass
+	public static abstract class BaseEntity {
+
+		private String id;
+
+		protected Employee employee = null;
+
+		protected BaseEntity() {
+		}
+
+		protected BaseEntity(Employee employee) {
+			this.setId( employee.getName() );
+			this.employee = employee;
+		}
+
+		@Id
+		@Column(name = "id", insertable = true, updatable = false)
+		public String getId() {
+			return id;
+		}
+
+		public void setId(String id) {
+			this.id = id;
+		}
+
+		public void setEmployee(Employee employee) {
+			this.employee = employee;
+		}
+	}
+
+	@Entity(name = "Task")
+	public static class Task extends BaseEntity {
+		private String name;
+
+		public Task() {
+		}
+
+		public Task(String name, Employee e) {
+			super( e ); // association set in super
+			setName( name );
+		}
+
+		public String getName() {
+			return name;
+		}
+
+		@OneToOne
+		@JoinColumn(name = "id", nullable = false)
+		@MapsId
+		public Employee getEmployee() {
+			return employee;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
 	}
 }
